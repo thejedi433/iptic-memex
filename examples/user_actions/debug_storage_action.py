@@ -1,4 +1,5 @@
 from base_classes import InteractionAction
+from utils.storage_utils import validate_sql_identifier
 
 
 class DebugStorageAction(InteractionAction):
@@ -55,6 +56,10 @@ class DebugStorageAction(InteractionAction):
         """Handle table selection commands"""
         if parts[0] == "use" and len(parts) == 2:
             table = parts[1]
+            # Validate table name to prevent SQL injection
+            if not validate_sql_identifier(table, "table name"):
+                print(f"Invalid table name: {table}")
+                return
             # Check if table exists
             provider = self.session.utils.storage.provider
             result = provider.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
@@ -76,6 +81,10 @@ class DebugStorageAction(InteractionAction):
                 
         elif parts[0] == "current":
             print(f"Current table: {self.current_table}")
+            # Validate current_table before use (defensive - should always be valid)
+            if not validate_sql_identifier(self.current_table, "table name"):
+                print(f"Error: Invalid current table name")
+                return
             # Show row count
             provider = self.session.utils.storage.provider
             try:
@@ -95,6 +104,9 @@ class DebugStorageAction(InteractionAction):
             if result:
                 print("\nAvailable tables:")
                 for row in result:
+                    # Validate table name from DB (defensive - DB contents should be safe, but validate anyway)
+                    if not validate_sql_identifier(row[0], "table name"):
+                        continue
                     count_result = provider.execute(f"SELECT COUNT(*) FROM {row[0]}")
                     count = count_result[0][0] if count_result else 0
                     current_marker = " (current)" if row[0] == self.current_table else ""
@@ -104,10 +116,16 @@ class DebugStorageAction(InteractionAction):
 
         elif parts[0] == "show" and len(parts) == 2:
             table = parts[1]
+            if not validate_sql_identifier(table, "table name"):
+                print(f"Invalid table name: {table}")
+                return
             self._display_table_contents(table)
 
         elif parts[0] == "clear" and len(parts) == 2:
             table = parts[1]
+            if not validate_sql_identifier(table, "table name"):
+                print(f"Invalid table name: {table}")
+                return
             if storage.reset_table(table):
                 print(f"Table '{table}' cleared")
             else:
@@ -115,6 +133,9 @@ class DebugStorageAction(InteractionAction):
 
         elif parts[0] == "count" and len(parts) == 2:
             table = parts[1]
+            if not validate_sql_identifier(table, "table name"):
+                print(f"Invalid table name: {table}")
+                return
             try:
                 result = provider.execute(f"SELECT COUNT(*) FROM {table}")
                 if result:
@@ -172,6 +193,11 @@ class DebugStorageAction(InteractionAction):
         provider = self.session.utils.storage.provider
         
         try:
+            # Validate current_table before use
+            if not validate_sql_identifier(self.current_table, "table name"):
+                print(f"Error: Invalid current table name")
+                return
+            
             # Get table structure
             cols = provider.execute(f"PRAGMA table_info({self.current_table})")
             if not cols:
@@ -195,6 +221,11 @@ class DebugStorageAction(InteractionAction):
                 column = parts[1]
                 value = " ".join(parts[2:])
                 
+                # Validate column name to prevent SQL injection
+                if not validate_sql_identifier(column, "column name"):
+                    print(f"Invalid column name: {column}")
+                    return
+                
                 if column not in column_names:
                     print(f"Column '{column}' not found. Available columns: {', '.join(column_names)}")
                     return
@@ -214,6 +245,10 @@ class DebugStorageAction(InteractionAction):
                         col, val = part.split('=', 1)
                         col = col.strip()
                         val = val.strip()
+                        # Validate column name to prevent SQL injection
+                        if not validate_sql_identifier(col, "column name"):
+                            print(f"Warning: Invalid column name '{col}', skipping")
+                            continue
                         if col in column_names:
                             assignments[col] = val
                         else:
@@ -246,6 +281,11 @@ class DebugStorageAction(InteractionAction):
 
     def _display_table_contents(self, table):
         """Display formatted table contents"""
+        # Validate table name to prevent SQL injection
+        if not validate_sql_identifier(table, "table name"):
+            print(f"Invalid table name: {table}")
+            return
+        
         provider = self.session.utils.storage.provider
         
         # Get column names
